@@ -1,0 +1,101 @@
+group 'galvanize.com'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'org.junit.platform:junit-platform-gradle-plugin:1.0.2'
+    }
+}
+
+apply plugin: 'java'
+apply plugin: "jacoco"
+apply plugin: "org.junit.platform.gradle.plugin"
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    jcenter()
+}
+
+sourceSets {
+    assessment {
+        java.srcDir file('assessment/java')
+        resources.srcDir file('assessment/resources')
+    }
+}
+
+task assess(type: JavaExec) {
+    dependsOn sourceSets.assessment.output.classesDirs
+    classpath = sourceSets.assessment.runtimeClasspath
+
+    main = 'org.junit.platform.console.ConsoleLauncher'
+    args = ['--scan-class-path',
+            sourceSets.assessment.output.getClassesDirs().asPath,
+            '--reports-dir', "${buildDir}/test-results/junit-assessment"]
+}
+
+jar {
+    baseName = '01-java-testable-project'
+    version = '0.0.1-SNAPSHOT'
+}
+
+dependencies {
+    testCompile 'org.hamcrest:hamcrest-all:1.3'
+
+    testCompile 'org.apiguardian:apiguardian-api:1.0.0',
+                'org.junit.jupiter:junit-jupiter-engine:5.0.2',
+                'org.junit.jupiter:junit-jupiter-params:5.0.2'
+
+    assessmentCompile group: 'cglib', name: 'cglib-nodep', version: '2.2'
+    assessmentCompile group: 'com.google.guava', name: 'guava', version: '23.6-jre'
+    assessmentCompile 'org.junit.platform:junit-platform-console:1.0.0'
+    assessmentCompile sourceSets.main.output
+    assessmentCompile configurations.testCompile
+    assessmentRuntime configurations.testRuntime
+}
+
+task fetchDependencies(type: Exec) {
+    configurations {
+        testRuntime.files
+        assessmentCompile.files
+    }
+    commandLine 'echo', 'Downloaded test and assess dependencies'
+}
+
+test {
+    jacoco {
+        destinationFile file("$buildDir/jacoco/junitPlatformTest.exec")
+    }
+}
+
+jacoco {
+    applyTo junitPlatformTest
+}
+
+jacocoTestReport {
+    executionData junitPlatformTest
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.9
+            }
+        }
+    }
+}
+
+junitPlatformTest.finalizedBy jacocoTestReport
+assess.finalizedBy test
+test.finalizedBy jacocoTestReport
+jacocoTestReport.finalizedBy jacocoTestCoverageVerification
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '4.4'
+    distributionType = Wrapper.DistributionType.ALL
+}
