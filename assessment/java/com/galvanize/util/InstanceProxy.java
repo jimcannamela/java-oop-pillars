@@ -1,6 +1,7 @@
 package com.galvanize.util;
 
-import java.lang.reflect.Method;
+import com.google.common.reflect.Invokable;
+
 import java.util.HashMap;
 import java.util.List;
 
@@ -8,14 +9,14 @@ import static com.galvanize.util.ReflectionUtils.failFormat;
 
 public class InstanceProxy {
 
-    private final HashMap<String, List<Method>> methods;
+    private final HashMap<String, List<Invokable>> methods;
     private final Object delegate;
 
     public static InstanceProxy wrap(Object instance, ClassProxy classProxy) {
         return new InstanceProxy(instance, classProxy.getMethods());
     }
 
-    public InstanceProxy(Object delegate, HashMap<String, List<Method>> methods) {
+    public InstanceProxy(Object delegate, HashMap<String, List<Invokable>> methods) {
         this.delegate = delegate;
         this.methods = methods;
     }

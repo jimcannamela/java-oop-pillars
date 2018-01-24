@@ -1,5 +1,8 @@
 package com.galvanize.util;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.reflect.Invokable;
+import com.google.common.reflect.Parameter;
 import com.google.common.reflect.TypeToken;
 import org.junit.jupiter.api.Assertions;
 
@@ -7,6 +10,7 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toList;
 
 public class ReflectionUtils {
 
@@ -65,13 +69,7 @@ public class ReflectionUtils {
         Assertions.fail(String.format(pattern, args));
     }
 
-    public static String parameterTypeNames(Type[] types) {
-        return Arrays.stream(types)
-                .map(ReflectionUtils::simpleName)
-                .collect(joining(DELIMITER));
-    }
-
-    public static Object invoke(Map<String, List<Method>> methods, Object delegate, String methodName, Object... args) throws Throwable {
+    public static Object invoke(Map<String, List<Invokable>> methods, Object delegate, String methodName, Object... args) throws Throwable {
         if (!methods.containsKey(methodName)) {
             failFormat(
                     "Error! You attempted to call the method `%s` on `%s` before calling `ensureMethod`",
@@ -79,16 +77,16 @@ public class ReflectionUtils {
                     simpleName(delegate));
         }
 
-        List<Method> possibleMethods = methods.get(methodName);
-        if (possibleMethods.isEmpty()) {
+        List<Invokable> possibleInvokables = methods.get(methodName);
+        if (possibleInvokables.isEmpty()) {
             failFormat(
                     "Error! You attempted to call the method `%s` on `%s` before calling `ensureMethod`",
                     methodName,
                     simpleName(delegate));
         }
 
-        Method method = bestMatch(possibleMethods, args).orElse(null);
-        if (method == null) {
+        Invokable invokable = bestMatch(possibleInvokables, args).orElse(null);
+        if (invokable == null) {
             failFormat(
                     "Error! Couldn't find a method matching `%s` on `%s` for args `%s`",
                     methodName,
@@ -98,8 +96,8 @@ public class ReflectionUtils {
 
         Object result = null;
         try {
-            method.setAccessible(true);
-            result = method.invoke(delegate, args);
+            invokable.setAccessible(true);
+            result = invokable.invoke(delegate, args);
         } catch (IllegalAccessException e) {
             (e.getCause() != null ? e.getCause() : e).printStackTrace();
             Assertions.fail("");
@@ -128,42 +126,16 @@ public class ReflectionUtils {
      * <p>
      * If it could match 2 methods, it throws a RuntimeException
      *
-     * @param methods a list of methods
+     * @param invokables a list of Invokables
      * @param args the arguments passed to invoke
      * @return an Optional<Method> (which is empty when no method matches)
      */
-    public static Optional<Method> bestMatch(List<Method> methods, Object[] args) {
+    public static Optional<Invokable> bestMatch(List<Invokable> invokables, Object[] args) {
         float highScore = 0;
-        HashMap<Float, LinkedList<Method>> scores = new HashMap<>();
+        HashMap<Float, LinkedList<Invokable>> scores = new HashMap<>();
 
-        for (Method method : methods) {
-            Optional<Float> methodScore = getMethodScore(method, args);
-            if (methodScore.isPresent()) {
-                Float val = methodScore.get();
-                if (!scores.containsKey(val)) scores.put(val, new LinkedList<>());
-                scores.get(val).add(method);
-
-                if (val > highScore) highScore = val;
-            }
-        }
-
-        if (scores.isEmpty()) return Optional.empty();
-
-        if (scores.get(highScore).size() > 1) throw new RuntimeException(String.format(
-                "Ambiguous match!  More than one method matched the call to `%s(%s)`",
-                methods.get(0).getName(),
-                Arrays.stream(args).map(Object::toString).collect(joining(DELIMITER))
-        ));
-
-        return Optional.of(scores.get(highScore).getFirst());
-    }
-
-    public static Optional<Constructor> bestMatchConstructor(List<Constructor> constructors, Object[] args) {
-        float highScore = 0;
-        HashMap<Float, LinkedList<Constructor>> scores = new HashMap<>();
-
-        for (Constructor constructor : constructors) {
-            Optional<Float> methodScore = getConstructorScore(constructor, args);
+        for (Invokable constructor : invokables) {
+            Optional<Float> methodScore = getInvokableScore(constructor, args);
             if (methodScore.isPresent()) {
                 Float val = methodScore.get();
                 if (!scores.containsKey(val)) scores.put(val, new LinkedList<>());
@@ -177,51 +149,28 @@ public class ReflectionUtils {
 
         if (scores.get(highScore).size() > 1) throw new RuntimeException(String.format(
                 "Ambiguous match!  More than one method matched the call to `%s(%s)`",
-                constructors.get(0).getName(),
+                invokables.get(0).getName(),
                 Arrays.stream(args).map(Object::toString).collect(joining(DELIMITER))
         ));
 
         return Optional.of(scores.get(highScore).getFirst());
     }
 
-    private static Optional<Float> getMethodScore(Method method, Object[] args) {
+    private static Optional<Float> getInvokableScore(Invokable invokable, Object[] args) {
         float methodScore = 0;
-        Class[] parameterTypes = method.getParameterTypes();
+        ImmutableList<Parameter> parameters = invokable.getParameters();
         Class[] argTypes = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
-        if (parameterTypes.length != argTypes.length) return Optional.empty();
+        if (parameters.size() != argTypes.length) return Optional.empty();
 
-        for (int i = 0; i < parameterTypes.length; i++) {
-            Class<?> parameterType = parameterTypes[i];
+        for (int i = 0; i < parameters.size(); i++) {
+            Parameter parameter = parameters.get(i);
             Class<?> argType = argTypes[i];
-
-            if (parameterType.equals(argType)) {
+            Class<?> rawType = parameter.getType().getRawType();
+            if (rawType.equals(argType)) {
                 methodScore += 3f;
-            } else if (parameterType.isAssignableFrom(argType)) {
-                float delta = minDistance(argType, parameterType) / 100f;
-                float range = parameterType.equals(Object.class) || parameterType.equals(Object[].class) ? 1 : 2;
-                methodScore += range - delta;
-            } else {
-                return Optional.empty();
-            }
-        }
-        return Optional.of(methodScore);
-    }
-
-    private static Optional<Float> getConstructorScore(Constructor constructor, Object[] args) {
-        float methodScore = 0;
-        Class[] parameterTypes = constructor.getParameterTypes();
-        Class[] argTypes = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
-        if (parameterTypes.length != argTypes.length) return Optional.empty();
-
-        for (int i = 0; i < parameterTypes.length; i++) {
-            Class<?> parameterType = parameterTypes[i];
-            Class<?> argType = argTypes[i];
-
-            if (parameterType.equals(argType)) {
-                methodScore += 3f;
-            } else if (parameterType.isAssignableFrom(argType)) {
-                float delta = minDistance(argType, parameterType) / 100f;
-                float range = parameterType.equals(Object.class) || parameterType.equals(Object[].class) ? 1 : 2;
+            } else if (rawType.isAssignableFrom(argType)) {
+                float delta = minDistance(argType, rawType) / 100f;
+                float range = rawType.equals(Object.class) || rawType.equals(Object[].class) ? 1 : 2;
                 methodScore += range - delta;
             } else {
                 return Optional.empty();
