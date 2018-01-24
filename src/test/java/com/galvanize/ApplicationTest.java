@@ -35,7 +35,7 @@ public class ApplicationTest {
 
         order.addItem(rental);
         assertEquals(3, order.items.size());
-        assertEquals(new BigDecimal("75.94"), order.getTotal());
+        assertEquals(new BigDecimal("88.38"), order.getTotal());
     }
 
 }
