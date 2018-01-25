@@ -6,11 +6,14 @@ import com.google.common.reflect.Parameter;
 import com.google.common.reflect.TypeToken;
 import org.junit.jupiter.api.Assertions;
 
-import java.lang.reflect.*;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
 
 import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toList;
 
 public class ReflectionUtils {
 
@@ -99,8 +102,7 @@ public class ReflectionUtils {
             invokable.setAccessible(true);
             result = invokable.invoke(delegate, args);
         } catch (IllegalAccessException e) {
-            (e.getCause() != null ? e.getCause() : e).printStackTrace();
-            Assertions.fail("");
+            Assertions.fail(exceptionToString(e.getCause() != null ? e.getCause() : e));
         } catch (InvocationTargetException e) {
             throw e.getCause();
         }
@@ -134,12 +136,12 @@ public class ReflectionUtils {
         float highScore = 0;
         HashMap<Float, LinkedList<Invokable>> scores = new HashMap<>();
 
-        for (Invokable constructor : invokables) {
-            Optional<Float> methodScore = getInvokableScore(constructor, args);
+        for (Invokable invokable : invokables) {
+            Optional<Float> methodScore = getInvokableScore(invokable, args);
             if (methodScore.isPresent()) {
                 Float val = methodScore.get();
                 if (!scores.containsKey(val)) scores.put(val, new LinkedList<>());
-                scores.get(val).add(constructor);
+                scores.get(val).add(invokable);
 
                 if (val > highScore) highScore = val;
             }
@@ -148,7 +150,7 @@ public class ReflectionUtils {
         if (scores.isEmpty()) return Optional.empty();
 
         if (scores.get(highScore).size() > 1) throw new RuntimeException(String.format(
-                "Ambiguous match!  More than one method matched the call to `%s(%s)`",
+                "Ambiguous match!  More than one _best_ match for the call to `%s(%s)`",
                 invokables.get(0).getName(),
                 Arrays.stream(args).map(Object::toString).collect(joining(DELIMITER))
         ));
@@ -220,5 +222,10 @@ public class ReflectionUtils {
         }
     }
 
+    public static String exceptionToString(Throwable t) {
+        StringWriter output = new StringWriter();
+        t.printStackTrace(new PrintWriter(output));
+        return output.toString();
+    }
 
 }

@@ -13,7 +13,6 @@ import java.util.function.Function;
 
 import static com.galvanize.util.ReflectionUtils.*;
 import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ClassProxy implements Type {
@@ -80,13 +79,13 @@ public class ClassProxy implements Type {
         builder.withReferenceType(referenceType);
         Method method = builder.build();
         Invokable invokable = Invokable.from(method);
-        if (methods.containsKey(builder.getName())) {
-            methods.get(builder.getName()).add(invokable);
-        } else {
-            ArrayList<Invokable> items = new ArrayList<>();
-            items.add(invokable);
+
+        List<Invokable> items = methods.get(builder.getName());
+        if (items == null) {
+            items = new ArrayList<>();
             methods.put(builder.getName(), items);
         }
+        items.add(invokable);
         return this;
     }
 

@@ -1,12 +1,10 @@
 package com.galvanize.util;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.Invokable;
 import com.google.common.reflect.TypeToken;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -32,13 +30,13 @@ public class MethodBuilder {
         this.declaringClass = declaringClass;
     }
 
+    public Class getDeclaringClass() {
+        return declaringClass;
+    }
+
     public MethodBuilder named(String name) {
         this.name = name;
         return this;
-    }
-
-    public Class getDeclaringClass() {
-        return declaringClass;
     }
 
     public MethodBuilder isStatic() {
@@ -108,8 +106,9 @@ public class MethodBuilder {
         Method rawMethod = Arrays.stream(declaringClass.getDeclaredMethods())
                 .filter(m -> m.getName().equals(name))
                 .filter(m -> {
+                    if (parameterTypes == null) return true;
+
                     Type[] genericParameterTypes = m.getGenericParameterTypes();
-                    if (parameterTypes == null) parameterTypes = new Object[]{};
                     if (parameterTypes.length != genericParameterTypes.length) return false;
 
                     for (int i = 0; i < genericParameterTypes.length; i++) {
@@ -135,7 +134,7 @@ public class MethodBuilder {
         }
 
         Invokable<?, Object> method = Invokable.from(rawMethod);
-        verifyAccess(method);
+        verifyVisibility(method);
         verifyStatic(method);
         verifyReturnType(rawMethod);
         verifyExceptions(rawMethod);
@@ -198,7 +197,7 @@ public class MethodBuilder {
         }
     }
 
-    private void verifyAccess(Invokable method) {
+    private void verifyVisibility(Invokable method) {
         if (visibility == null) return;
 
         if (!visibilityMatches(visibility, method)) {
