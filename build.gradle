@@ -96,6 +96,6 @@ test.finalizedBy jacocoTestReport
 jacocoTestReport.finalizedBy jacocoTestCoverageVerification
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '4.4'
+    gradleVersion = '4.4.1'
     distributionType = Wrapper.DistributionType.ALL
 }
