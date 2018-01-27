@@ -106,9 +106,8 @@ public class MethodBuilder {
         Method rawMethod = Arrays.stream(declaringClass.getDeclaredMethods())
                 .filter(m -> m.getName().equals(name))
                 .filter(m -> {
-                    if (parameterTypes == null) return true;
-
                     Type[] genericParameterTypes = m.getGenericParameterTypes();
+                    if (parameterTypes == null) parameterTypes = new Object[]{};
                     if (parameterTypes.length != genericParameterTypes.length) return false;
 
                     for (int i = 0; i < genericParameterTypes.length; i++) {

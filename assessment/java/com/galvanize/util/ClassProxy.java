@@ -288,36 +288,8 @@ public class ClassProxy implements Type {
         return enhancer;
     }
 
-    public Object instanceImplementing(String methodName, Object result) {
-        return instanceImplementing(methods -> methods.put(methodName, result));
-    }
-
-    public Object instanceImplementing(Function<ImmutableMap.Builder<String, Object>, ImmutableMap.Builder<String, Object>> fn) {
-        ImmutableMap<String, Object> simple = fn.apply(ImmutableMap.builder()).build();
-        return instanceImplementingWithComplexMethods(methods -> {
-            simple.forEach((key, value) -> {
-                methods.put(key, args -> value);
-            });
-            return methods;
-        });
-    }
-
-    public Object instanceImplementingWithComplexMethods(Function<ImmutableMap.Builder<String, FunctionThrows<Object[], Object>>, ImmutableMap.Builder<String, FunctionThrows<Object[], Object>>> fn) {
-        ImmutableMap<String, FunctionThrows<Object[], Object>> methods = fn.apply(ImmutableMap.builder()).build();
-
-        return Proxy.newProxyInstance(
-                this.getClass().getClassLoader(),
-                new Class[]{delegate},
-                new AbstractInvocationHandler() {
-                    @Override
-                    protected Object handleInvocation(Object proxy, Method method, Object[] args) throws Throwable {
-                        FunctionThrows<Object[], Object> returnValueFn = methods.getOrDefault(method.getName(), null);
-                        if (returnValueFn == null) {
-                            throw new RuntimeException(String.format("Could not call `%s` on `%s`", method.getName(), proxy));
-                        }
-                        return returnValueFn.apply(args);
-                    }
-                });
+    public ConcreteClassBuilder concreteClass() {
+        return new ConcreteClassBuilder(this);
     }
 
     public ClassProxy ensureCheckedException() {

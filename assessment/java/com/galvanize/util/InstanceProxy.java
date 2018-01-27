@@ -21,6 +21,11 @@ public class InstanceProxy {
         this.methods = methods;
     }
 
+    public InstanceProxy(Object instance, ClassProxy classProxy) {
+        this.delegate = instance;
+        this.methods = classProxy.getMethods();
+    }
+
     public Object getDelegate() {
         return delegate;
     }

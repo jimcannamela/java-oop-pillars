@@ -19,7 +19,21 @@ public class ReflectionUtils {
 
     public static final String DELIMITER = ", ";
 
+    private static final Map<Class, Class> PRIMITIVES = new HashMap<Class, Class>(){
+        {
+            put(Boolean.TYPE, Boolean.class);
+            put(Byte.TYPE, Byte.class);
+            put(Character.TYPE, Character.class);
+            put(Short.TYPE, Short.class);
+            put(Integer.TYPE, Integer.class);
+            put(Long.TYPE, Long.class);
+            put(Float.TYPE, Float.class);
+            put(Double.TYPE, Double.class);
+        }
+    };
+
     public static String simpleName(Object instance) {
+        if (instance instanceof ClassProxy) return simpleName(((ClassProxy) instance).getDelegate());
         if (instance instanceof TypeToken<?>) return simpleName((TypeToken) instance);
         if (instance instanceof Class) return simpleName((Class) instance);
         if (instance instanceof Type) return simpleName((Type) instance);
@@ -28,6 +42,10 @@ public class ReflectionUtils {
 
     public static String simpleName(Class _class) {
         return _class.getSimpleName();
+    }
+
+    public static String simpleName(ClassProxy proxy) {
+        return simpleName(proxy.getDelegate());
     }
 
     public static String simpleName(Type type) {
@@ -129,7 +147,7 @@ public class ReflectionUtils {
      * If it could match 2 methods, it throws a RuntimeException
      *
      * @param invokables a list of Invokables
-     * @param args the arguments passed to invoke
+     * @param args       the arguments passed to invoke
      * @return an Optional<Method> (which is empty when no method matches)
      */
     public static Optional<Invokable> bestMatch(List<Invokable> invokables, Object[] args) {
@@ -174,6 +192,8 @@ public class ReflectionUtils {
                 float delta = minDistance(argType, rawType) / 100f;
                 float range = rawType.equals(Object.class) || rawType.equals(Object[].class) ? 1 : 2;
                 methodScore += range - delta;
+            } else if (PRIMITIVES.containsKey(rawType) && PRIMITIVES.get(rawType).equals(argType)) {
+                methodScore += 0.5;
             } else {
                 return Optional.empty();
             }
