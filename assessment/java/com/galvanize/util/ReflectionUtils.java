@@ -90,7 +90,40 @@ public class ReflectionUtils {
         Assertions.fail(String.format(pattern, args));
     }
 
+    public static Throwable assertInvokeThrows(
+            Map<String, List<Invokable>> methods,
+            Object delegate,
+            Class<?> expectedType,
+            String methodName,
+            Object... args) {
+        try {
+            invoke(methods, delegate, methodName, args);
+        } catch (Throwable actualException) {
+            if (expectedType.isInstance(actualException)) {
+                return actualException;
+            } else {
+                failFormat(
+                        "Expected `%s` to throw a `%s` but it threw `%s`",
+                        delegate.getClass(),
+                        expectedType.getSimpleName(),
+                        actualException.getClass().getSimpleName()
+                );
+            }
+        }
+        failFormat(
+                "Expected `%s` to throw a %s but it threw nothing",
+                delegate.getClass(),
+                expectedType.getSimpleName()
+        );
+        return null;
+    }
+
     public static Object invoke(Map<String, List<Invokable>> methods, Object delegate, String methodName, Object... args) throws Throwable {
+        Object[] mappedArgs = Arrays.stream(args).map(arg -> {
+            if (arg instanceof InstanceProxy) return ((InstanceProxy) arg).getDelegate();
+            return arg;
+        }).toArray(Object[]::new);
+
         if (!methods.containsKey(methodName)) {
             failFormat(
                     "Error! You attempted to call the method `%s` on `%s` before calling `ensureMethod`",
@@ -106,7 +139,7 @@ public class ReflectionUtils {
                     simpleName(delegate));
         }
 
-        Invokable invokable = bestMatch(possibleInvokables, args).orElse(null);
+        Invokable invokable = bestMatch(possibleInvokables, mappedArgs).orElse(null);
         if (invokable == null) {
             failFormat(
                     "Error! Couldn't find a method matching `%s` on `%s` for args `%s`",
@@ -118,7 +151,7 @@ public class ReflectionUtils {
         Object result = null;
         try {
             invokable.setAccessible(true);
-            result = invokable.invoke(delegate, args);
+            result = invokable.invoke(delegate, mappedArgs);
         } catch (IllegalAccessException e) {
             Assertions.fail(exceptionToString(e.getCause() != null ? e.getCause() : e));
         } catch (InvocationTargetException e) {

@@ -70,7 +70,9 @@ public class PillarsTest {
             String methodName = "totalPrice";
             BigDecimal result = new BigDecimal("999.99");
 
-            Object item = Item.subclassWith(methodName, result).create();
+            InstanceProxy item = Item.subclass()
+                    .intercept(methodName, result)
+                    .build();
 
             ClassProxy Order = ClassProxy.classNamed("com.galvanize.Order")
                     .ensureConstructor()
@@ -85,7 +87,7 @@ public class PillarsTest {
             List<?> items = (List<?>) order.invoke("getItems");
 
             assertEquals(new BigDecimal("999.99"), totalAmount);
-            assertEquals(singletonList(item), items);
+            assertEquals(singletonList(item.getDelegate()), items);
         }
 
     }

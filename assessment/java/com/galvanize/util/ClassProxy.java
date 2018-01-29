@@ -1,13 +1,12 @@
 package com.galvanize.util;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.reflect.AbstractInvocationHandler;
 import com.google.common.reflect.Invokable;
 import com.google.common.reflect.TypeToken;
-import net.sf.cglib.proxy.Enhancer;
-import net.sf.cglib.proxy.MethodInterceptor;
 
-import java.lang.reflect.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.function.Function;
 
@@ -25,6 +24,14 @@ public class ClassProxy implements Type {
 
     public static ClassProxy of(Class delegate) {
         return new ClassProxy(delegate);
+    }
+
+    public static ClassProxy classNamed(String name) {
+        return new ClassProxy(name).ensureClass();
+    }
+
+    public static ClassProxy interfaceNamed(String name) {
+        return new ClassProxy(name).ensureInterface();
     }
 
     public ClassProxy(String name) {
@@ -47,12 +54,11 @@ public class ClassProxy implements Type {
         return methods;
     }
 
-    public static ClassProxy classNamed(String name) {
-        return new ClassProxy(name).ensureClass();
-    }
-
-    public static ClassProxy interfaceNamed(String name) {
-        return new ClassProxy(name).ensureInterface();
+    public ClassProxy getSuperclassProxy() {
+        if (delegate.getSuperclass() == null) {
+            failFormat("Cannot get superclass of `%s`", delegate.getSimpleName());
+        }
+        return ClassProxy.of(delegate.getSuperclass());
     }
 
     private ClassProxy ensureClass() {
@@ -72,6 +78,33 @@ public class ClassProxy implements Type {
         }
         this.referenceType = ReferenceType.INTERFACE;
         return this;
+    }
+
+    public ClassProxy ensureCheckedException() {
+        if (RuntimeException.class.isAssignableFrom(delegate)) {
+            failFormat(
+                    "Expected `%s` to be a checked exception, but it inherits from `RuntimeException`",
+                    delegate.getSimpleName()
+            );
+        }
+        if (Error.class.isAssignableFrom(delegate)) {
+            failFormat(
+                    "Expected `%s` to be a checked exception, but it inherits from `Error`",
+                    delegate.getSimpleName()
+            );
+        }
+        if (!Throwable.class.isAssignableFrom(delegate)) {
+            failFormat(
+                    "Expected `%s` to inherit from `Throwable` but it did not",
+                    delegate.getSimpleName()
+            );
+        }
+
+        return this;
+    }
+
+    public ClassProxy ensureMethod(String methodName, Object... parameterTypes) {
+        return ensureMethod(m -> m.named(methodName).withParameters(parameterTypes));
     }
 
     public ClassProxy ensureMethod(Function<MethodBuilder, MethodBuilder> fn) {
@@ -132,7 +165,7 @@ public class ClassProxy implements Type {
                 return ((TypeToken<?>) object).getRawType();
             } else {
                 throw new IllegalArgumentException(String.format(
-                    "You must pass a `Class`, `TypeToken` or `ClassProxy` to `ensureConstructor`, but you passed `(%s) %s`",
+                        "You must pass a `Class`, `TypeToken` or `ClassProxy` to `ensureConstructor`, but you passed `(%s) %s`",
                         object.getClass().getSimpleName(),
                         object.toString()
                 ));
@@ -156,10 +189,27 @@ public class ClassProxy implements Type {
         return this;
     }
 
+    public ClassProxy ensureImplements(ClassProxy parent) {
+        ensureImplements(parent.getDelegate());
+        methods.putAll(parent.methods);
+        return this;
+    }
+
+    public ClassProxy ensureImplements(Class<?> parent) {
+        if (!parent.isAssignableFrom(getDelegate())) {
+            failFormat(
+                    "Expected the `%s` class to implement the `%s` interface but it does not",
+                    getDelegate().getSimpleName(),
+                    parent.getSimpleName());
+        }
+
+        return this;
+    }
+
     public InstanceProxy newInstance(Object... args) {
         if (args.length == 0) {
             try {
-                return new InstanceProxy(getDelegate().getDeclaredConstructor().newInstance(), methods);
+                return new InstanceProxy(getDelegate().getDeclaredConstructor().newInstance(), this);
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 failFormat("Could not instantiate `%s` with no args", getDelegate().getSimpleName());
             }
@@ -171,7 +221,7 @@ public class ClassProxy implements Type {
             Optional<Invokable> matchedConstructor = bestMatch(constructors, mappedArgs);
             if (matchedConstructor.isPresent()) {
                 try {
-                    return new InstanceProxy(matchedConstructor.get().invoke(delegate, mappedArgs), methods);
+                    return new InstanceProxy(matchedConstructor.get().invoke(delegate, mappedArgs), this);
                 } catch (IllegalAccessException | InvocationTargetException e) {
                     failFormat("Could not instantiate `%s` with no args", getDelegate().getSimpleName());
                 }
@@ -183,6 +233,14 @@ public class ClassProxy implements Type {
             );
         }
         return null;
+    }
+
+    public SubclassBuilder subclass() {
+        return new SubclassBuilder(this);
+    }
+
+    public ConcreteClassBuilder concreteClass() {
+        return new ConcreteClassBuilder(this);
     }
 
     public Object invoke(String methodName, Object... args) {
@@ -208,115 +266,7 @@ public class ClassProxy implements Type {
     }
 
     public Throwable assertInvokeThrows(Class expectedType, String methodName, Object... args) {
-        try {
-            invokeExpectingException(methodName, args);
-        } catch (Throwable actualException) {
-            if (expectedType.isInstance(actualException)) {
-                return actualException;
-            } else {
-                failFormat(
-                        "Expected `%s` to throw a `%s` but it threw `%s`",
-                        delegate.getClass(),
-                        expectedType.getSimpleName(),
-                        actualException.getClass().getSimpleName()
-                );
-            }
-        }
-        failFormat(
-                "Expected `%s` to throw a %s but it threw nothing",
-                delegate.getClass(),
-                expectedType.getSimpleName()
-        );
-        return null;
-    }
-
-    public ClassProxy ensureImplements(ClassProxy parent) {
-        ensureImplements(parent.getDelegate());
-        methods.putAll(parent.methods); // TODO: reference the parent's methods, and then look them up the chain
-        return this;
-    }
-
-    public ClassProxy ensureImplements(Class<?> parent) {
-        assertEquals(
-                true,
-                parent.isAssignableFrom(getDelegate()),
-                String.format(
-                        "Expected the `%s` class to implement the `%s` interface but it does not",
-                        getDelegate().getSimpleName(),
-                        parent.getSimpleName())
-        );
-
-        return this;
-    }
-
-    public ClassProxy getSuperclassProxy() {
-        if (delegate.getSuperclass() == null) {
-            failFormat("Cannot get superclass of `%s`", delegate.getSimpleName());
-        }
-        return ClassProxy.of(delegate.getSuperclass());
-    }
-
-    public Enhancer subclassWith(String methodName, Object result) {
-        return subclassWith(methods -> methods.put(methodName, result));
-    }
-
-    public Enhancer subclassWith(Function<ImmutableMap.Builder<String, Object>, ImmutableMap.Builder<String, Object>> fn) {
-        ImmutableMap<String, Object> simple = fn.apply(ImmutableMap.builder()).build();
-        return subclassWithComplexMethods(methods -> {
-            simple.forEach((key, value) -> {
-                methods.put(key, args -> value);
-            });
-            return methods;
-        });
-    }
-
-    public Enhancer subclassWithComplexMethods(Function<ImmutableMap.Builder<String, FunctionThrows<Object[], Object>>, ImmutableMap.Builder<String, FunctionThrows<Object[], Object>>> fn) {
-        ImmutableMap<String, FunctionThrows<Object[], Object>> methods = fn.apply(ImmutableMap.builder()).build();
-
-        Enhancer enhancer = new Enhancer();
-        enhancer.setSuperclass(delegate);
-        enhancer.setCallback((MethodInterceptor) (obj, method, args, proxy) -> {
-            if (method.getDeclaringClass() != Object.class) {
-                FunctionThrows<Object[], Object> returnValueFn = methods.getOrDefault(method.getName(), null);
-                if (returnValueFn == null)
-                    throw new RuntimeException(String.format("Could not call `%s` on `%s`", method.getName(), obj));
-                return returnValueFn.apply(args);
-            } else {
-                return proxy.invokeSuper(obj, args);
-            }
-        });
-        return enhancer;
-    }
-
-    public ConcreteClassBuilder concreteClass() {
-        return new ConcreteClassBuilder(this);
-    }
-
-    public ClassProxy ensureCheckedException() {
-        if (RuntimeException.class.isAssignableFrom(delegate)) {
-            failFormat(
-                    "Expected `%s` to be a checked exception, but it inherits from `RuntimeException`",
-                    delegate.getSimpleName()
-            );
-        }
-        if (Error.class.isAssignableFrom(delegate)) {
-            failFormat(
-                    "Expected `%s` to be a checked exception, but it inherits from `Error`",
-                    delegate.getSimpleName()
-            );
-        }
-        if (!Exception.class.isAssignableFrom(delegate)) {
-            failFormat(
-                    "Expected `%s` to inherit from `Exception` but it did not",
-                    delegate.getSimpleName()
-            );
-        }
-
-        return this;
-    }
-
-    public Constructor<?>[] getConstructors() {
-        return delegate.getConstructors();
+        return ReflectionUtils.assertInvokeThrows(methods, delegate, expectedType, methodName, args);
     }
 
 }

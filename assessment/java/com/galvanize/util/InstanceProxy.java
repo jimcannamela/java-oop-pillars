@@ -9,21 +9,12 @@ import static com.galvanize.util.ReflectionUtils.failFormat;
 
 public class InstanceProxy {
 
-    private final HashMap<String, List<Invokable>> methods;
     private final Object delegate;
-
-    public static InstanceProxy wrap(Object instance, ClassProxy classProxy) {
-        return new InstanceProxy(instance, classProxy.getMethods());
-    }
-
-    public InstanceProxy(Object delegate, HashMap<String, List<Invokable>> methods) {
-        this.delegate = delegate;
-        this.methods = methods;
-    }
+    private final ClassProxy classProxy;
 
     public InstanceProxy(Object instance, ClassProxy classProxy) {
         this.delegate = instance;
-        this.methods = classProxy.getMethods();
+        this.classProxy = classProxy;
     }
 
     public Object getDelegate() {
@@ -32,11 +23,11 @@ public class InstanceProxy {
 
     public Object invoke(String methodName, Object... args) {
         try {
-            return ReflectionUtils.invoke(methods, delegate, methodName, args);
+            return ReflectionUtils.invoke(classProxy.getMethods(), delegate, methodName, args);
         } catch (Throwable throwable) {
             failFormat(
                     "Expected `%s.%s` to not throw an exception, but it threw `%s`",
-                    delegate.getClass().getSimpleName(),
+                    classProxy.getDelegate().getSimpleName(),
                     methodName,
                     throwable.toString()
             );
@@ -46,31 +37,15 @@ public class InstanceProxy {
     }
 
     public Object invokeExpectingException(String methodName, Object... args) throws Throwable {
-        return ReflectionUtils.invoke(methods, delegate, methodName, args);
+        return ReflectionUtils.invoke(classProxy.getMethods(), delegate, methodName, args);
     }
 
     public Throwable assertInvokeThrows(ClassProxy exceptionProxy, String methodName, Object... args) {
-        Class expectedType = exceptionProxy.getDelegate();
-        try {
-            invokeExpectingException(methodName, args);
-        } catch (Throwable actualException) {
-            if (expectedType.isInstance(actualException)) {
-                return actualException;
-            } else {
-                failFormat(
-                        "Expected `%s` to throw a `%s` but it threw `%s`",
-                        delegate.getClass(),
-                        expectedType.getSimpleName(),
-                        actualException.getClass().getSimpleName()
-                );
-            }
-        }
-        failFormat(
-                "Expected `%s` to throw a %s but it threw nothing",
-                delegate.getClass(),
-                expectedType.getSimpleName()
-        );
-        return null;
+        return assertInvokeThrows(exceptionProxy.getDelegate(), methodName, args);
+    }
+
+    public Throwable assertInvokeThrows(Class<?> expectedType, String methodName, Object... args) {
+        return ReflectionUtils.assertInvokeThrows(classProxy.getMethods(), delegate, expectedType, methodName, args);
     }
 
 }
