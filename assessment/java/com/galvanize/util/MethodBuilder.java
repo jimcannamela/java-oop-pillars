@@ -6,6 +6,7 @@ import com.google.common.reflect.TypeToken;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static com.galvanize.util.ReflectionUtils.DELIMITER;
@@ -14,15 +15,17 @@ import static java.util.stream.Collectors.joining;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-// TODO: since name is required, make this a constructor parameter
 public class MethodBuilder {
+
+    public static final String ANY_METHOD_NAME = "*any name*";
 
     private final Class declaringClass;
     private boolean isStatic;
     private Object returnType;
-    private Object[] parameterTypes;
+    private TypeToken<?>[] parameterTypes;
+    private int parameterCount = -1;
     private ReferenceType referenceType = ReferenceType.CLASS;
-    private String name;
+    private String name = ANY_METHOD_NAME;
     private Visibility visibility;
     private Class<? extends Throwable>[] exceptionTypes;
 
@@ -35,7 +38,8 @@ public class MethodBuilder {
     }
 
     public MethodBuilder named(String name) {
-        this.name = name;
+
+        this.name = (name == null || name.trim().isEmpty()) ? ANY_METHOD_NAME : name;
         return this;
     }
 
@@ -82,11 +86,32 @@ public class MethodBuilder {
         return this;
     }
 
+    public MethodBuilder withParameterCount(int numberOfParameters) {
+        if (parameterTypes != null && parameterTypes.length != numberOfParameters) {
+            failFormat("Parameter count, %d, doesn't match the number of previously specified parameters, %d",
+                    numberOfParameters, parameterTypes.length);
+        }
+        if (numberOfParameters < 0) {
+            failFormat("Specified parameter count, %d, is invalid", numberOfParameters);
+        }
+        parameterCount = numberOfParameters;
+        return this;
+    }
+
     public MethodBuilder withParameters(Object... parameterTypes) {
         this.parameterTypes = Arrays.stream(parameterTypes).map(type -> {
-            if (type instanceof ClassProxy) return ((ClassProxy) type).getDelegate();
-            return type;
-        }).toArray(Object[]::new);
+            if (type instanceof  TypeToken<?>) return type;
+            if (type instanceof ClassProxy) return TypeToken.of(((ClassProxy) type).getDelegate());
+            if (type instanceof Type) return TypeToken.of((Type) type);
+            throw new IllegalArgumentException(String.format(
+                    "You must pass a `Type`, `TypeToken` or `ClassProxy` to `withParameters`, but you passed a `%s`",
+                    type.getClass().getSimpleName())
+            );
+        }).toArray(TypeToken<?>[]::new);
+        if (parameterCount >= 0 && parameterTypes != null && parameterTypes.length != parameterCount) {
+            failFormat("Number of parameters, %d, doesn't match the previously specified parameter count, %d",
+                    parameterTypes.length, parameterCount);
+        }
         return this;
     }
 
@@ -101,22 +126,26 @@ public class MethodBuilder {
     }
 
     public Method build() {
-        String methodSignature = methodSignature();
 
         Method rawMethod = Arrays.stream(declaringClass.getDeclaredMethods())
-                .filter(m -> m.getName().equals(name))
+                .filter(m -> {
+                    if (name.equals(ANY_METHOD_NAME)) return true;
+                    return m.getName().equals(name);
+                })
                 .filter(m -> {
                     Type[] genericParameterTypes = m.getGenericParameterTypes();
-                    if (parameterTypes == null) parameterTypes = new Object[]{};
+
+                    if (parameterCount >= 0 && genericParameterTypes.length != parameterCount) return false;
+                    if (parameterTypes == null) return true;
+
                     if (parameterTypes.length != genericParameterTypes.length) return false;
 
                     for (int i = 0; i < genericParameterTypes.length; i++) {
-                        Object actualType = genericParameterTypes[i];
-                        Object expectedType = parameterTypes[i];
+                        TypeToken<?> actualType = TypeToken.of(genericParameterTypes[i]);
+                        TypeToken<?> expectedType = parameterTypes[i];
                         if (actualType.equals(expectedType)) continue; // TODO: change to isAssignableFrom?
 
-                        TypeToken<?> token = (TypeToken<?>) expectedType;
-                        if (!token.isSupertypeOf((Type) actualType)) return false;
+                        if (!expectedType.isSupertypeOf(actualType)) return false;
                     }
                     return true;
                 })
@@ -128,7 +157,7 @@ public class MethodBuilder {
                     "Expected the %s `%s` to define a method with the signature `%s`",
                     referenceType.getName(),
                     declaringClass.getSimpleName(),
-                    methodSignature
+                    methodSignature()
             );
         }
 
@@ -137,6 +166,8 @@ public class MethodBuilder {
         verifyStatic(method);
         verifyReturnType(rawMethod);
         verifyExceptions(rawMethod);
+
+        if (name.equals(ANY_METHOD_NAME)) name = rawMethod.getName();
 
         return rawMethod;
     }
@@ -218,14 +249,13 @@ public class MethodBuilder {
     }
 
     public String methodSignature() {
-        if (name == null || name.isEmpty()) {
-            failFormat("You must specify the name of the method on `%s`.", declaringClass.getSimpleName());
-        }
         String paramString = "";
         if (parameterTypes != null) {
             paramString = Arrays.stream(parameterTypes)
                     .map(ReflectionUtils::simpleName)
                     .collect(joining(DELIMITER));
+        } else if (parameterCount > 0) {
+            paramString = String.join(", ", Collections.nCopies(parameterCount, "<?>"));
         }
 
         String exceptionsString = "";

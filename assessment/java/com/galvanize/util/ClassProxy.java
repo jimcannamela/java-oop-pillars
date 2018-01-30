@@ -12,7 +12,6 @@ import java.util.function.Function;
 
 import static com.galvanize.util.ReflectionUtils.*;
 import static java.util.stream.Collectors.joining;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ClassProxy implements Type {
 
@@ -24,6 +23,10 @@ public class ClassProxy implements Type {
 
     public static ClassProxy of(Class delegate) {
         return new ClassProxy(delegate);
+    }
+
+    public static ClassProxy of(TypeToken token) {
+        return new ClassProxy(token.getRawType());
     }
 
     public static ClassProxy classNamed(String name) {
@@ -50,6 +53,7 @@ public class ClassProxy implements Type {
         return delegate;
     }
 
+    //FIXME pab: verified Methods
     public HashMap<String, List<Invokable>> getMethods() {
         return methods;
     }
@@ -61,7 +65,7 @@ public class ClassProxy implements Type {
         return ClassProxy.of(delegate.getSuperclass());
     }
 
-    private ClassProxy ensureClass() {
+    public ClassProxy ensureClass() {
         if (getDelegate().isInterface()) {
             failFormat("Expected `%s` to be a class, but it was an interface", getDelegate().getSimpleName());
         }
@@ -72,7 +76,7 @@ public class ClassProxy implements Type {
         return this;
     }
 
-    private ClassProxy ensureInterface() {
+    public ClassProxy ensureInterface() {
         if (!getDelegate().isInterface()) {
             failFormat("Expected `%s` to be an interface, but it is not", getDelegate().getSimpleName());
         }
@@ -103,6 +107,31 @@ public class ClassProxy implements Type {
         return this;
     }
 
+    private void addMethod(Method method) {
+        Invokable invokable = Invokable.from(method);
+        String methodName = invokable.getName();
+
+        List<Invokable> items = methods.get(methodName);
+        if (items == null) {
+            items = new ArrayList<>();
+            methods.put(methodName, items);
+        }
+        if (! items.contains(invokable)) items.add(invokable);
+    }
+
+    public ClassProxy ensureMethod(Method method) {
+        if (! Arrays.asList(getDelegate().getDeclaredMethods()).contains(method)) {
+            failFormat(
+                    "Expected the %s `%s` to define a method with the signature `%s`",
+                    referenceType.getName(),
+                    delegate.getSimpleName(),
+                    method.toGenericString()
+            );
+        }
+        addMethod(method);
+        return this;
+    }
+
     public ClassProxy ensureMethod(String methodName, Object... parameterTypes) {
         return ensureMethod(m -> m.named(methodName).withParameters(parameterTypes));
     }
@@ -110,15 +139,7 @@ public class ClassProxy implements Type {
     public ClassProxy ensureMethod(Function<MethodBuilder, MethodBuilder> fn) {
         MethodBuilder builder = fn.apply(new MethodBuilder(getDelegate()));
         builder.withReferenceType(referenceType);
-        Method method = builder.build();
-        Invokable invokable = Invokable.from(method);
-
-        List<Invokable> items = methods.get(builder.getName());
-        if (items == null) {
-            items = new ArrayList<>();
-            methods.put(builder.getName(), items);
-        }
-        items.add(invokable);
+        addMethod(builder.build());
         return this;
     }
 
@@ -153,6 +174,29 @@ public class ClassProxy implements Type {
                         .isPublic()
                         .named(getterName)
                         .returns(type));
+    }
+
+    public ClassProxy ensureConstructorCount(int numberOfConstructors) {
+        if (numberOfConstructors < 1) {
+            throw new IllegalArgumentException(String.format("Specified constructor count, %d, is invalid",
+            numberOfConstructors));
+        }
+        Constructor<?>[] constructors = getDelegate().getConstructors();
+        if (constructors.length != numberOfConstructors) {
+            if (numberOfConstructors == 1) {
+                failFormat("Expected `%s` to have exactly one constructor, but found %d",
+                        getDelegate().getSimpleName(),
+                        numberOfConstructors
+                );
+            } else {
+                failFormat("Expected `%s` to have exactly %d constructors, but found %d",
+                        getDelegate().getSimpleName(),
+                        numberOfConstructors,
+                        constructors.length
+                );
+            }
+        }
+        return this;
     }
 
     public ClassProxy ensureConstructor(Object... args) {
@@ -241,6 +285,32 @@ public class ClassProxy implements Type {
 
     public ConcreteClassBuilder concreteClass() {
         return new ConcreteClassBuilder(this);
+    }
+
+    public Object invoke(Method method, Object... args) {
+        try {
+            return ReflectionUtils.invoke(methods, delegate, Invokable.from(method), args);
+        } catch (Throwable throwable) {
+            failFormat(
+                    "Expected `%s.%s` to not throw an exception, but it threw `%s`",
+                    delegate.getSimpleName(),
+                    method.getName(),
+                    throwable.toString()
+            );
+            return null;
+        }
+    }
+
+    public Object invokeExpectingException(Method method, Object... args) throws Throwable {
+        return ReflectionUtils.invoke(methods, delegate, Invokable.from(method), args);
+    }
+
+    public Throwable assertInvokeThrows(ClassProxy exceptionProxy, Method method, Object... args) {
+        return assertInvokeThrows(exceptionProxy.delegate, method, args);
+    }
+
+    public Throwable assertInvokeThrows(Class expectedType, Method method, Object... args) {
+        return ReflectionUtils.assertInvokeThrows(methods, delegate, expectedType, Invokable.from(method), args);
     }
 
     public Object invoke(String methodName, Object... args) {

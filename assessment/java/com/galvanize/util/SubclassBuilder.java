@@ -1,12 +1,10 @@
 package com.galvanize.util;
 
-import com.google.common.collect.ImmutableMap;
 import net.sf.cglib.proxy.Enhancer;
 import net.sf.cglib.proxy.MethodInterceptor;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
 public class SubclassBuilder {
 

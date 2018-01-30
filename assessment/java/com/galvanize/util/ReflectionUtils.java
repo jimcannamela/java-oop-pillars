@@ -3,6 +3,7 @@ package com.galvanize.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.reflect.Invokable;
 import com.google.common.reflect.Parameter;
+import com.google.common.reflect.TypeParameter;
 import com.google.common.reflect.TypeToken;
 import org.junit.jupiter.api.Assertions;
 
@@ -37,37 +38,19 @@ public class ReflectionUtils {
         if (instance instanceof TypeToken<?>) return simpleName((TypeToken) instance);
         if (instance instanceof Class) return simpleName((Class) instance);
         if (instance instanceof Type) return simpleName((Type) instance);
-        return instance.getClass().getSimpleName();
+        return simpleName(TypeToken.of(instance.getClass()));
     }
 
-    public static String simpleName(Class _class) {
-        return _class.getSimpleName();
+    public static String simpleName(Class clazz) {
+        return simpleName(TypeToken.of(clazz));
     }
 
     public static String simpleName(ClassProxy proxy) {
-        return simpleName(proxy.getDelegate());
+        return simpleName(TypeToken.of(proxy.getDelegate()));
     }
 
     public static String simpleName(Type type) {
-        if (type instanceof ParameterizedType) {
-            Type[] actualTypeArguments = ((ParameterizedType) type).getActualTypeArguments();
-            return String.format(
-                    "%s<%s>",
-                    ((Class) ((ParameterizedType) type).getRawType()).getSimpleName(),
-                    Arrays.stream(actualTypeArguments)
-                            .map(genericType -> {
-                                if (genericType instanceof ParameterizedType) {
-                                    return simpleName(genericType);
-                                }
-                                return ((Class) genericType).getSimpleName();
-                            })
-                            .collect(joining(DELIMITER))
-            );
-        } else if (type instanceof Class) {
-            return ((Class) type).getSimpleName();
-        } else {
-            return type.getTypeName();
-        }
+        return simpleName(TypeToken.of(type));
     }
 
     public static String simpleName(TypeToken token) {
@@ -83,7 +66,7 @@ public class ReflectionUtils {
                         return resolved.getRawType().getSimpleName();
                     }
                 }).collect(joining(DELIMITER))
-        );
+        ).replaceAll("<>", "");
     }
 
     public static void failFormat(String pattern, Object... args) {
@@ -118,11 +101,35 @@ public class ReflectionUtils {
         return null;
     }
 
+    public static Throwable assertInvokeThrows(
+            Map<String, List<Invokable>> methods,
+            Object delegate,
+            Class<?> expectedType,
+            Invokable method,
+            Object... args) {
+        try {
+            invoke(methods, delegate, method, args);
+        } catch (Throwable actualException) {
+            if (expectedType.isInstance(actualException)) {
+                return actualException;
+            } else {
+                failFormat(
+                        "Expected `%s` to throw a `%s` but it threw `%s`",
+                        delegate.getClass(),
+                        expectedType.getSimpleName(),
+                        actualException.getClass().getSimpleName()
+                );
+            }
+        }
+        failFormat(
+                "Expected `%s` to throw a %s but it threw nothing",
+                delegate.getClass(),
+                expectedType.getSimpleName()
+        );
+        return null;
+    }
+
     public static Object invoke(Map<String, List<Invokable>> methods, Object delegate, String methodName, Object... args) throws Throwable {
-        Object[] mappedArgs = Arrays.stream(args).map(arg -> {
-            if (arg instanceof InstanceProxy) return ((InstanceProxy) arg).getDelegate();
-            return arg;
-        }).toArray(Object[]::new);
 
         if (!methods.containsKey(methodName)) {
             failFormat(
@@ -139,7 +146,7 @@ public class ReflectionUtils {
                     simpleName(delegate));
         }
 
-        Invokable invokable = bestMatch(possibleInvokables, mappedArgs).orElse(null);
+        Invokable invokable = bestMatch(possibleInvokables, resolveInstanceProxies(args)).orElse(null);
         if (invokable == null) {
             failFormat(
                     "Error! Couldn't find a method matching `%s` on `%s` for args `%s`",
@@ -148,17 +155,35 @@ public class ReflectionUtils {
                     Arrays.stream(args).map(Object::toString).collect(joining(DELIMITER)));
         }
 
+        return invoke(methods, delegate, invokable, args);
+    }
+
+    public static Object invoke(Map<String, List<Invokable>> methods, Object delegate, Invokable method, Object... args) throws Throwable {
+
+        if (! methods.values().stream().anyMatch(list -> list.contains(method))) {
+            failFormat(
+                    "Error! You attempted to call the method `%s` on `%s` before calling `ensureMethod`",
+                    method.getName(),
+                    simpleName(delegate));
+        }
+
         Object result = null;
         try {
-            invokable.setAccessible(true);
-            result = invokable.invoke(delegate, mappedArgs);
+            method.setAccessible(true);
+            result = method.invoke(delegate, resolveInstanceProxies(args));
         } catch (IllegalAccessException e) {
             Assertions.fail(exceptionToString(e.getCause() != null ? e.getCause() : e));
         } catch (InvocationTargetException e) {
             throw e.getCause();
         }
         return result;
+    }
 
+    private static Object[] resolveInstanceProxies(Object[] args) {
+        return Arrays.stream(args).map(arg -> {
+                if (arg instanceof InstanceProxy) return ((InstanceProxy) arg).getDelegate();
+                return arg;
+            }).toArray(Object[]::new);
     }
 
     /**
@@ -281,4 +306,11 @@ public class ReflectionUtils {
         return output.toString();
     }
 
+    public static <T> TypeToken<List<T>> listOf(ClassProxy proxy) {
+        return listOf((TypeToken<T>) TypeToken.of(proxy.getDelegate()));
+    }
+
+    public static <T> TypeToken<List<T>> listOf(TypeToken<T> token) {
+        return new TypeToken<List<T>>() {}.where(new TypeParameter<T>() {}, token);
+    }
 }

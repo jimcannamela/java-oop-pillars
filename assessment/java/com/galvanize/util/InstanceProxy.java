@@ -2,8 +2,7 @@ package com.galvanize.util;
 
 import com.google.common.reflect.Invokable;
 
-import java.util.HashMap;
-import java.util.List;
+import java.lang.reflect.Method;
 
 import static com.galvanize.util.ReflectionUtils.failFormat;
 
@@ -19,6 +18,32 @@ public class InstanceProxy {
 
     public Object getDelegate() {
         return delegate;
+    }
+
+    public Object invoke(Method method, Object... args) {
+        try {
+            return ReflectionUtils.invoke(classProxy.getMethods(), delegate, Invokable.from(method), args);
+        } catch (Throwable throwable) {
+            failFormat(
+                    "Expected `%s.%s` to not throw an exception, but it threw `%s`",
+                    classProxy.getDelegate().getSimpleName(),
+                    method.getName(),
+                    throwable.toString()
+            );
+            return null;
+        }
+    }
+
+    public Object invokeExpectingException(Method method, Object... args) throws Throwable {
+        return ReflectionUtils.invoke(classProxy.getMethods(), delegate, Invokable.from(method), args);
+    }
+
+    public Throwable assertInvokeThrows(ClassProxy exceptionProxy, Method method, Object... args) {
+        return assertInvokeThrows(exceptionProxy.getDelegate(), method, args);
+    }
+
+    public Throwable assertInvokeThrows(Class<?> expectedType, Method method, Object... args) {
+        return ReflectionUtils.assertInvokeThrows(classProxy.getMethods(), delegate, expectedType, Invokable.from(method), args);
     }
 
     public Object invoke(String methodName, Object... args) {
