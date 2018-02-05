@@ -2,12 +2,13 @@ package com.galvanize.util;
 
 import com.google.common.reflect.Invokable;
 import com.google.common.reflect.TypeToken;
+import org.opentest4j.AssertionFailedError;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.Arrays;
 import java.util.function.Function;
 
 import static com.galvanize.util.ReflectionUtils.*;
@@ -18,8 +19,8 @@ public class ClassProxy implements Type {
     private Class<?> delegate = null;
     private ReferenceType referenceType = ReferenceType.CLASS;
 
-    private final HashMap<String, List<Invokable>> methods = new HashMap<>();
-    private final List<Invokable> constructors = new ArrayList<>();
+    private final VerifiedInvokables methods;
+    private final VerifiedInvokables constructors;
 
     public static ClassProxy of(Class delegate) {
         return new ClassProxy(delegate);
@@ -43,18 +44,21 @@ public class ClassProxy implements Type {
         } catch (ClassNotFoundException e) {
             failFormat("Expected to find a type named `%s` but did not", name);
         }
+        constructors = new VerifiedInvokables(delegate);
+        methods = new VerifiedInvokables(delegate);
     }
 
-    public ClassProxy(Class delegate) {
+    public ClassProxy(Class<?> delegate) {
         this.delegate = delegate;
+        constructors = new VerifiedInvokables(delegate);
+        methods = new VerifiedInvokables(delegate);
     }
 
     public Class<?> getDelegate() {
         return delegate;
     }
 
-    //FIXME pab: verified Methods
-    public HashMap<String, List<Invokable>> getMethods() {
+    public VerifiedInvokables getVerifiedMethods() {
         return methods;
     }
 
@@ -107,18 +111,6 @@ public class ClassProxy implements Type {
         return this;
     }
 
-    private void addMethod(Method method) {
-        Invokable invokable = Invokable.from(method);
-        String methodName = invokable.getName();
-
-        List<Invokable> items = methods.get(methodName);
-        if (items == null) {
-            items = new ArrayList<>();
-            methods.put(methodName, items);
-        }
-        if (! items.contains(invokable)) items.add(invokable);
-    }
-
     public ClassProxy ensureMethod(Method method) {
         if (! Arrays.asList(getDelegate().getDeclaredMethods()).contains(method)) {
             failFormat(
@@ -128,7 +120,7 @@ public class ClassProxy implements Type {
                     method.toGenericString()
             );
         }
-        addMethod(method);
+        methods.add(method);
         return this;
     }
 
@@ -139,7 +131,7 @@ public class ClassProxy implements Type {
     public ClassProxy ensureMethod(Function<MethodBuilder, MethodBuilder> fn) {
         MethodBuilder builder = fn.apply(new MethodBuilder(getDelegate()));
         builder.withReferenceType(referenceType);
-        addMethod(builder.build());
+        methods.add(builder.build());
         return this;
     }
 
@@ -177,7 +169,7 @@ public class ClassProxy implements Type {
     }
 
     public ClassProxy ensureConstructorCount(int numberOfConstructors) {
-        if (numberOfConstructors < 1) {
+        if (numberOfConstructors < 0) {
             throw new IllegalArgumentException(String.format("Specified constructor count, %d, is invalid",
             numberOfConstructors));
         }
@@ -186,7 +178,7 @@ public class ClassProxy implements Type {
             if (numberOfConstructors == 1) {
                 failFormat("Expected `%s` to have exactly one constructor, but found %d",
                         getDelegate().getSimpleName(),
-                        numberOfConstructors
+                        constructors.length
                 );
             } else {
                 failFormat("Expected `%s` to have exactly %d constructors, but found %d",
@@ -225,9 +217,7 @@ public class ClassProxy implements Type {
                     "Expected `%s` to define a constructor with the signature `%s(%s)`",
                     getDelegate().getSimpleName(),
                     getDelegate().getSimpleName(),
-                    Arrays.stream(args)
-                            .map(ReflectionUtils::simpleName)
-                            .collect(joining(","))
+                    joinSimpleNames(Arrays.stream(args))
             );
         }
         return this;
@@ -235,7 +225,7 @@ public class ClassProxy implements Type {
 
     public ClassProxy ensureImplements(ClassProxy parent) {
         ensureImplements(parent.getDelegate());
-        methods.putAll(parent.methods);
+        methods.addAll(parent.methods);
         return this;
     }
 
@@ -258,23 +248,21 @@ public class ClassProxy implements Type {
                 failFormat("Could not instantiate `%s` with no args", getDelegate().getSimpleName());
             }
         } else {
-            Object[] mappedArgs = Arrays.stream(args)
-                    .map(arg -> arg instanceof InstanceProxy ? ((InstanceProxy) arg).getDelegate() : arg)
-                    .toArray();
+            Object[] mappedArgs = ReflectionUtils.resolveInstanceProxies(args);
 
-            Optional<Invokable> matchedConstructor = bestMatch(constructors, mappedArgs);
-            if (matchedConstructor.isPresent()) {
-                try {
-                    return new InstanceProxy(matchedConstructor.get().invoke(delegate, mappedArgs), this);
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    failFormat("Could not instantiate `%s` with no args", getDelegate().getSimpleName());
-                }
+            try {
+                return new InstanceProxy(constructors.newInstance(mappedArgs), this);
+            } catch (AssertionFailedError e) {
+                throw e;
+            } catch (Throwable throwable) {
+                failFormat(
+                        "Could not invoke constructor on `%s` for args `%s`\n%s: %s\n",
+                        getDelegate().getSimpleName(),
+                        Arrays.stream(mappedArgs).map(o -> o != null ? o.toString() : "null").collect(joining(DELIMITER)),
+                        throwable.getClass().getSimpleName(),
+                        throwable.getMessage()
+                );
             }
-            failFormat(
-                    "Could not find a constructor on `%s` that matches `%s`",
-                    getDelegate().getSimpleName(),
-                    Arrays.stream(mappedArgs).map(Object::toString).collect(joining(DELIMITER))
-            );
         }
         return null;
     }
@@ -289,7 +277,7 @@ public class ClassProxy implements Type {
 
     public Object invoke(Method method, Object... args) {
         try {
-            return ReflectionUtils.invoke(methods, delegate, Invokable.from(method), args);
+            return methods.invoke(delegate, Invokable.from(method), args);
         } catch (Throwable throwable) {
             failFormat(
                     "Expected `%s.%s` to not throw an exception, but it threw `%s`",
@@ -302,7 +290,7 @@ public class ClassProxy implements Type {
     }
 
     public Object invokeExpectingException(Method method, Object... args) throws Throwable {
-        return ReflectionUtils.invoke(methods, delegate, Invokable.from(method), args);
+        return methods.invoke(delegate, Invokable.from(method), args);
     }
 
     public Throwable assertInvokeThrows(ClassProxy exceptionProxy, Method method, Object... args) {
@@ -315,7 +303,7 @@ public class ClassProxy implements Type {
 
     public Object invoke(String methodName, Object... args) {
         try {
-            return ReflectionUtils.invoke(methods, delegate, methodName, args);
+            return methods.invoke(delegate, methodName, args);
         } catch (Throwable throwable) {
             failFormat(
                     "Expected `%s.%s` to not throw an exception, but it threw `%s`",
@@ -328,7 +316,7 @@ public class ClassProxy implements Type {
     }
 
     public Object invokeExpectingException(String methodName, Object... args) throws Throwable {
-        return ReflectionUtils.invoke(methods, delegate, methodName, args);
+        return methods.invoke(delegate, methodName, args);
     }
 
     public Throwable assertInvokeThrows(ClassProxy exceptionProxy, String methodName, Object... args) {
