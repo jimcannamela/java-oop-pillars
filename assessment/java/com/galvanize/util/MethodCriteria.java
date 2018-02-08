@@ -15,13 +15,12 @@ public class MethodCriteria {
 
     private Optional<Visibility> visibility = Optional.empty();
     private Optional<Boolean> isStatic = Optional.empty();
-    // FIXME pab: returnType should be an Optional<TypeToken> to support void
     private Optional<Object> returnType = Optional.empty();
     private Optional<String> name = Optional.empty();
-    // FIXME pab: change to List from array
+    // TODO pab: change to List from array
     private Optional<TypeToken<?>[]> parameterTypes = Optional.empty();
     private Optional<Integer> parameterCount = Optional.empty();
-    // FIXME pab: change to List<TypeToken<? extends Throwable>>
+    // TODO pab: change to List<TypeToken<? extends Throwable>>
     private Optional<Class<? extends Throwable>[]> exceptionTypes = Optional.empty();
 
     public MethodCriteria() {

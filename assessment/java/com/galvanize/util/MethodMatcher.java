@@ -147,29 +147,18 @@ public class MethodMatcher {
         }
     }
 
-    // This matches the original functionality and doesn't actually use the criteria
-    public static Method findFirst(List<Method> methods, String name, TypeToken<?>... specifiedTypes) {
-        Method rawMethod = methods.stream()
-                .filter(m -> m.getName().equals(name))
-                .filter(m -> {
-                    if (specifiedTypes == null || specifiedTypes.length == 0) return true;
+    // TODO pab: Write unit tests, particularly for subtypes/supertypes
+    public static boolean typesMatch(Type[] actualTypes, TypeToken<?>[] specifiedTypes) {
+        if (specifiedTypes.length != actualTypes.length) return false;
 
-                    Type[] genericParameterTypes = m.getGenericParameterTypes();
-                    return typesMatch(genericParameterTypes, specifiedTypes);
-                })
-                .findFirst()
-                .orElse(null);
+        for (int i = 0; i < actualTypes.length; i++) {
+            if (specifiedTypes[i] == null) continue;    // null is *wildcard* and matches any type
 
-        return rawMethod;
-    }
-
-    private static boolean typesMatch(Type[] parameters, TypeToken<?>[] specifiedTypes) {
-        if (specifiedTypes.length != parameters.length) return false;
-
-        for (int i = 0; i < parameters.length; i++) {
-            TypeToken<?> actualType = TypeToken.of(parameters[i]);
+            TypeToken<?> actualType = TypeToken.of(actualTypes[i]);
             TypeToken<?> expectedType = specifiedTypes[i];
-            if (!actualType.isSubtypeOf(expectedType)) return false;    // matches same types as well
+            if (actualType.isSubtypeOf(expectedType)) continue;    // matches same types as well
+
+            return false;
         }
         return true;
     }

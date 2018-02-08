@@ -100,10 +100,20 @@ public class MethodBuilder {
         List<Method> methods = Arrays.asList(declaringClass.getDeclaredMethods());
         Method rawMethod;
         if (criteria.getName().isPresent()) {
-            rawMethod = MethodMatcher.findFirst(
-                    methods,
-                    criteria.getName().get(),
-                    criteria.getParameterTypes().orElse(new TypeToken[0]));
+            /*
+             * Returns the first method matching the specified name and parameter types.
+             * If no parameters are specified then it matches only methods with no arguments.
+             */
+            rawMethod = methods.stream()
+                    .filter(m -> m.getName().equals(criteria.getName().get()))
+                    .filter(m -> {
+                        Type[] actualParameterTypes = m.getGenericParameterTypes();
+                        TypeToken<?>[] specifiedParameterTypes= criteria.getParameterTypes()
+                                .orElse(new TypeToken[criteria.getParameterCount().orElse(0)]);
+                        return MethodMatcher.typesMatch(actualParameterTypes, specifiedParameterTypes);
+                    })
+                    .findFirst()
+                    .orElse(null);
 
             if (rawMethod != null) {
                 verifyVisibility(rawMethod);
