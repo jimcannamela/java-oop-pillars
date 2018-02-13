@@ -58,14 +58,6 @@ dependencies {
     assessmentRuntime configurations.testRuntime
 }
 
-task fetchDependencies(type: Exec) {
-    configurations {
-        testRuntime.files
-        assessmentCompile.files
-    }
-    commandLine 'echo', 'Downloaded test and assess dependencies'
-}
-
 test {
     jacoco {
         destinationFile file("$buildDir/jacoco/junitPlatformTest.exec")
