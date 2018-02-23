@@ -1,12 +1,12 @@
 package com.galvanize.util;
 
-import com.google.common.reflect.Invokable;
 import com.google.common.reflect.TypeParameter;
 import com.google.common.reflect.TypeToken;
 import org.junit.jupiter.api.Assertions;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Arrays;
@@ -66,7 +66,7 @@ public class ReflectionUtils {
     }
 
     public static Throwable assertInvokeThrows(
-            VerifiedInvokables methods,
+            VerifiedExecutables methods,
             Object delegate,
             Class<?> expectedType,
             String methodName,
@@ -86,10 +86,10 @@ public class ReflectionUtils {
     }
 
     public static Throwable assertInvokeThrows(
-            VerifiedInvokables methods,
+            VerifiedExecutables methods,
             Object delegate,
             Class<?> expectedType,
-            Invokable method,
+            Method method,
             Object... args) {
         try {
             methods.invoke(delegate, method, args);
@@ -135,4 +135,9 @@ public class ReflectionUtils {
     public static <T> TypeToken<List<T>> listOf(TypeToken<T> token) {
         return new TypeToken<List<T>>() {}.where(new TypeParameter<T>() {}, token);
     }
+
+    public static <T> TypeToken<List<T>> listOf(Class clazz) {
+        return listOf((TypeToken<T>) TypeToken.of(clazz));
+    }
+
 }

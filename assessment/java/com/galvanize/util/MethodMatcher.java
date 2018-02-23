@@ -1,13 +1,8 @@
 package com.galvanize.util;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.reflect.Invokable;
-import com.google.common.reflect.Parameter;
 import com.google.common.reflect.TypeToken;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Type;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -50,20 +45,20 @@ public class MethodMatcher {
      * <p>
      * If it could match 2 methods, it throws a RuntimeException
      *
-     * @param invokables a list of Invokables
+     * @param executables a list of Executables
      * @param args       the arguments passed to invoke
      * @return an Optional<Method> (which is empty when no method matches)
      */
-    public static Optional<Invokable> bestMatch(List<Invokable> invokables, Object[] args) {
+    public static Optional<Executable> bestMatch(List<? extends Executable> executables, Object[] args) {
         float highScore = 0;
-        HashMap<Float, LinkedList<Invokable>> scores = new HashMap<>();
+        HashMap<Float, LinkedList<Executable>> scores = new HashMap<>();
 
-        for (Invokable invokable : invokables) {
-            Optional<Float> methodScore = getInvokableScore(invokable, args);
+        for (Executable executable : executables) {
+            Optional<Float> methodScore = getExecutableScore(executable, args);
             if (methodScore.isPresent()) {
                 Float val = methodScore.get();
                 if (!scores.containsKey(val)) scores.put(val, new LinkedList<>());
-                scores.get(val).add(invokable);
+                scores.get(val).add(executable);
 
                 if (val > highScore) highScore = val;
             }
@@ -73,24 +68,24 @@ public class MethodMatcher {
 
         if (scores.get(highScore).size() > 1) throw new RuntimeException(String.format(
                 "Ambiguous match!  More than one _best_ match for the call to `%s(%s)`",
-                invokables.get(0).getName(),
+                executables.get(0).getName(),
                 Arrays.stream(args).map(Object::toString).collect(joining(ReflectionUtils.DELIMITER))
         ));
 
         return Optional.of(scores.get(highScore).getFirst());
     }
 
-    private static Optional<Float> getInvokableScore(Invokable invokable, Object[] args) {
+    private static Optional<Float> getExecutableScore(Executable executable, Object[] args) {
         float methodScore = 0;
-        ImmutableList<Parameter> parameters = invokable.getParameters();
+        Parameter[] parameters = executable.getParameters();
         Class[] argTypes = Arrays.stream(args).map(arg -> arg != null ? arg.getClass() : null).toArray(Class[]::new);
-        if (parameters.size() != argTypes.length) return Optional.empty();
+        if (parameters.length != argTypes.length) return Optional.empty();
 
-        for (int i = 0; i < parameters.size(); i++) {
-            Parameter parameter = parameters.get(i);
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
             Class<?> argType = argTypes[i];
             if (argType == null) continue;
-            Class<?> rawType = parameter.getType().getRawType();
+            Class<?> rawType = parameter.getType();
             if (rawType.equals(argType)) {
                 methodScore += 3f;
             } else if (rawType.isAssignableFrom(argType)) {
@@ -199,10 +194,8 @@ public class MethodMatcher {
             return candidates.get(0);
         }
 
-        HashMap<Invokable, Method> candidateMap = new HashMap<>();
-        candidates.forEach(m -> candidateMap.put(Invokable.from(m), m));
-        Optional<Invokable> matchedMethod = bestMatch(candidateMap.keySet().stream().collect(Collectors.toList()),
+        Optional<Executable> matchedMethod = bestMatch(candidates,
                 criteria.getParameterTypes().orElse(new TypeToken[0]));
-        return matchedMethod.isPresent() ? candidateMap.get(matchedMethod.get()) : null;
+        return (Method) matchedMethod.orElse(null);
     }
 }

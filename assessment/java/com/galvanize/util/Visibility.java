@@ -1,37 +1,31 @@
 package com.galvanize.util;
 
-import com.google.common.reflect.Invokable;
-
-import java.lang.reflect.Method;
+import java.lang.reflect.Executable;
+import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 
 public enum Visibility {
     PUBLIC("public"), PROTECTED("protected"), PACKAGE_PRIVATE("package private", false), PRIVATE("private");
 
-    public static Visibility of(Invokable invokable) {
-        if (invokable.isPublic()) return PUBLIC;
-        if (invokable.isProtected()) return PROTECTED;
-        if (invokable.isPrivate()) return PRIVATE;
+    public static Visibility of(Executable executable) {
+        if (Modifier.isPublic(executable.getModifiers())) return PUBLIC;
+        if (Modifier.isProtected(executable.getModifiers())) return PROTECTED;
+        if (Modifier.isPrivate(executable.getModifiers())) return PRIVATE;
         return PACKAGE_PRIVATE;
     }
 
-    public static Visibility of(Method method) {
-        if (isPublic(method)) return PUBLIC;
-        if (isProtected(method)) return PROTECTED;
-        if (isPrivate(method)) return PRIVATE;
+    public static Visibility of(Member member) {
+        if (Modifier.isPublic(member.getModifiers())) return PUBLIC;
+        if (Modifier.isProtected(member.getModifiers())) return PROTECTED;
+        if (Modifier.isPrivate(member.getModifiers())) return PRIVATE;
         return PACKAGE_PRIVATE;
     }
 
-    private static boolean isPublic(Method method) {
-        return Modifier.isPublic(method.getModifiers());
-    }
-
-    private static boolean isProtected(Method method) {
-        return Modifier.isProtected(method.getModifiers());
-    }
-
-    private static boolean isPrivate(Method method) {
-        return Modifier.isPrivate(method.getModifiers());
+    public static Visibility of(Class clazz) {
+        if (Modifier.isPublic(clazz.getModifiers())) return PUBLIC;
+        if (Modifier.isProtected(clazz.getModifiers())) return PROTECTED;
+        if (Modifier.isPrivate(clazz.getModifiers())) return PRIVATE;
+        return PACKAGE_PRIVATE;
     }
 
     private final String name;

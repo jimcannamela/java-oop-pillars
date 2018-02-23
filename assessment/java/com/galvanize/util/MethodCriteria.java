@@ -75,14 +75,12 @@ public class MethodCriteria {
     }
 
     public void setParameterTypes(TypeToken<?>[] parameterTypes) {
-        if (parameterTypes == null) {
-            this.parameterTypes = Optional.empty();
-        } else if (parameterCount.isPresent() && parameterTypes.length != parameterCount.get()) {
+        if (parameterTypes != null && parameterCount.isPresent() && parameterTypes.length != parameterCount.get()) {
             throw new IllegalArgumentException(String.format(
                     "Number of parameters, %d, doesn't match the previously specified parameter count, %d",
                     parameterTypes.length, parameterCount.get()));
         }
-        this.parameterTypes = Optional.of(parameterTypes);
+        this.parameterTypes = Optional.ofNullable(parameterTypes);
     }
 
     public Optional<Integer> getParameterCount() {
@@ -90,22 +88,21 @@ public class MethodCriteria {
     }
 
     public void setParameterCount(Integer numberOfParameters) {
-        if (numberOfParameters == null) {
-            this.parameterCount = Optional.empty();
+        if (numberOfParameters != null) {
+            if (numberOfParameters < 0) {
+                throw new IllegalArgumentException(String.format(
+                        "Specified parameter count, %d, is invalid",
+                        numberOfParameters)
+                );
 
-        } else if (numberOfParameters < 0) {
-            throw new IllegalArgumentException(String.format(
-                    "Specified parameter count, %d, is invalid",
-                    numberOfParameters)
-            );
-
-        } else if (parameterTypes.isPresent() && parameterTypes.get().length != numberOfParameters) {
-            throw new IllegalArgumentException(String.format(
-                    "Parameter count, %d, doesn't match the number of previously specified parameters, %d",
-                    numberOfParameters, parameterTypes.get().length)
-            );
+            } else if (parameterTypes.isPresent() && parameterTypes.get().length != numberOfParameters) {
+                throw new IllegalArgumentException(String.format(
+                        "Parameter count, %d, doesn't match the number of previously specified parameters, %d",
+                        numberOfParameters, parameterTypes.get().length)
+                );
+            }
         }
-        this.parameterCount = Optional.of(numberOfParameters);
+        this.parameterCount = Optional.ofNullable(numberOfParameters);
     }
 
     public Optional<Class<? extends Throwable>[]> getExceptionTypes() {

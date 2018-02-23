@@ -1,6 +1,5 @@
 package com.galvanize.util;
 
-import com.google.common.reflect.Invokable;
 
 import java.lang.reflect.Method;
 
@@ -22,7 +21,7 @@ public class InstanceProxy {
 
     public Object invoke(Method method, Object... args) {
         try {
-            return getMethods().invoke(delegate, Invokable.from(method), args);
+            return getMethods().invoke(delegate, method, args);
         } catch (Throwable throwable) {
             failFormat(
                     "Expected `%s.%s` to not throw an exception, but it threw `%s`",
@@ -34,12 +33,12 @@ public class InstanceProxy {
         }
     }
 
-    private VerifiedInvokables getMethods() {
+    private VerifiedExecutables getMethods() {
         return classProxy.getVerifiedMethods();
     }
 
     public Object invokeExpectingException(Method method, Object... args) throws Throwable {
-        return getMethods().invoke(delegate, Invokable.from(method), args);
+        return getMethods().invoke(delegate, method, args);
     }
 
     public Throwable assertInvokeThrows(ClassProxy exceptionProxy, Method method, Object... args) {
@@ -47,7 +46,7 @@ public class InstanceProxy {
     }
 
     public Throwable assertInvokeThrows(Class<?> expectedType, Method method, Object... args) {
-        return ReflectionUtils.assertInvokeThrows(getMethods(), delegate, expectedType, Invokable.from(method), args);
+        return ReflectionUtils.assertInvokeThrows(getMethods(), delegate, expectedType, method, args);
     }
 
     public Object invoke(String methodName, Object... args) {
