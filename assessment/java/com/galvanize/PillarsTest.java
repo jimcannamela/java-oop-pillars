@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import com.galvanize.util.ClassProxy;
 import com.galvanize.util.InstanceProxy;
-import com.galvanize.util.MethodBuilder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,7 +18,6 @@ import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 public class PillarsTest {
 
