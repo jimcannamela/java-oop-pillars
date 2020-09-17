@@ -86,8 +86,3 @@ junitPlatformTest.finalizedBy jacocoTestReport
 assess.finalizedBy test
 test.finalizedBy jacocoTestReport
 jacocoTestReport.finalizedBy jacocoTestCoverageVerification
-
-task wrapper(type: Wrapper) {
-    gradleVersion = '4.4.1'
-    distributionType = Wrapper.DistributionType.ALL
-}
