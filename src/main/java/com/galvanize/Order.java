@@ -14,15 +14,16 @@ public class Order {
         items.add(item);
         if (item instanceof Lease) {
             Lease lease = (Lease) item;
-            total = total.add(lease.pricePerMonth.multiply(BigDecimal.valueOf(lease.numberOfMonths)));
+            total = total.add(lease.getPricePerMonth().multiply(BigDecimal.valueOf(lease.getNumberOfMonths())));
         }
         else if (item instanceof Purchase) {
-            total = total.add(((Purchase) item).price);
+            total = total.add(((Purchase) item).getPrice());
         }
         else if (item instanceof Rental) {
             Rental rental = (Rental) item;
-            long days = LocalDateTime.now().until(rental.endDate, ChronoUnit.DAYS) + 1;
-            total = total.add(rental.rentalPricePerDay.multiply(BigDecimal.valueOf(days)));
+            long days = LocalDateTime.now().until(rental.getEndDate(), ChronoUnit.DAYS) + 1;
+            total = total.add(rental.getRentalPricePerDay().multiply(BigDecimal.valueOf(days)));
+            System.out.println(days +" "+ total);
         }
     }
 
