@@ -2,6 +2,7 @@ package com.galvanize;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 class Rental extends Item {
     private LocalDateTime endDate;
@@ -23,5 +24,11 @@ class Rental extends Item {
                 "rentalPricePerDay=" + super.getPrice() +
                 ", endDate=" + endDate +
                 '}';
+    }
+
+    @Override
+    BigDecimal totalPrice() {
+        long days = LocalDateTime.now().until(getEndDate(), ChronoUnit.DAYS) + 1;
+        return getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
     }
 }

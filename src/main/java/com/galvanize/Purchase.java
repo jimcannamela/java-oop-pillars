@@ -10,11 +10,6 @@ class Purchase extends Item {
         return super.getPrice();
     }
 
-    public String getProductName() {
-        return productName;
-    }
-
-
     public Purchase(String productName, BigDecimal price) {
         this.productName = productName;
         super.setPrice(price);
@@ -26,5 +21,10 @@ class Purchase extends Item {
                 "price=" + super.getPrice() +
                 ", productName='" + productName + '\'' +
                 '}';
+    }
+
+    @Override
+    BigDecimal totalPrice() {
+        return getPrice();
     }
 }

@@ -22,19 +22,19 @@ public class ApplicationTest {
         assertEquals(true, rental.toString().contains("rentalPricePerDay=12.44"));
 
         Order order = new Order();
-        assertEquals(0, order.items.size());
+        assertEquals(0, order.getItems().size());
         assertEquals(new BigDecimal("0.00"), order.getTotal());
 
         order.addItem(lease);
-        assertEquals(1, order.items.size());
+        assertEquals(1, order.getItems().size());
         assertEquals(new BigDecimal("18.30"), order.getTotal());
 
         order.addItem(purchase);
-        assertEquals(2, order.items.size());
+        assertEquals(2, order.getItems().size());
         assertEquals(new BigDecimal("26.18"), order.getTotal());
 
         order.addItem(rental);
-        assertEquals(3, order.items.size());
+        assertEquals(3, order.getItems().size());
         assertEquals(new BigDecimal("88.38"), order.getTotal());
     }
 

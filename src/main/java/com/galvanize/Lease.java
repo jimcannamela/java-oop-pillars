@@ -10,14 +10,6 @@ class Lease extends Item {
         return super.getPrice();
     }
 
-    public int getNumberOfMonths() {
-        return numberOfMonths;
-    }
-
-    public String getLicensePlate() {
-        return licensePlate;
-    }
-
     public Lease(String licensePlate, BigDecimal pricePerMonth, int numberOfMonths) {
         this.licensePlate = licensePlate;
         super.setPrice(pricePerMonth);
@@ -31,5 +23,10 @@ class Lease extends Item {
                 ", numberOfMonths=" + numberOfMonths +
                 ", licensePlate='" + licensePlate + '\'' +
                 '}';
+    }
+
+    @Override
+    BigDecimal totalPrice() {
+        return getPricePerMonth().multiply(BigDecimal.valueOf(numberOfMonths));
     }
 }
