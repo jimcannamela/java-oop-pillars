@@ -3,36 +3,24 @@ package com.galvanize;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public class Rental {
-
-    private BigDecimal rentalPricePerDay;
+class Rental extends Item {
     private LocalDateTime endDate;
 
     public BigDecimal getRentalPricePerDay() {
-        return rentalPricePerDay;
+        return super.getPrice();
     }
-
-    public void setRentalPricePerDay(BigDecimal rentalPricePerDay) {
-        this.rentalPricePerDay = rentalPricePerDay;
-    }
-
     public LocalDateTime getEndDate() {
         return endDate;
     }
-
-    public void setEndDate(LocalDateTime endDate) {
-        this.endDate = endDate;
-    }
-
     public Rental(BigDecimal rentalPricePerDay, LocalDateTime endDate) {
-        this.rentalPricePerDay = rentalPricePerDay;
+        super.setPrice(rentalPricePerDay);
         this.endDate = endDate;
     }
 
     @Override
     public String toString() {
         return "Rental{" +
-                "rentalPricePerDay=" + rentalPricePerDay +
+                "rentalPricePerDay=" + super.getPrice() +
                 ", endDate=" + endDate +
                 '}';
     }
