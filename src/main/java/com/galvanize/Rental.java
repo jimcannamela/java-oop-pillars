@@ -14,6 +14,7 @@ class Rental extends Item {
         return endDate;
     }
     public Rental(BigDecimal rentalPricePerDay, LocalDateTime endDate) {
+        System.out.println(endDate);
         super.setPrice(rentalPricePerDay);
         this.endDate = endDate;
     }
